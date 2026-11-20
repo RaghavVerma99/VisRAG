@@ -65,9 +65,10 @@ module = ["pymupdf", "pymupdf.*", "fitz", "fitz.*"]
 ignore_missing_imports = true
 disallow_untyped_calls = false
 
-# Scripts call PyMuPDF's partially-annotated API; they stay loosely checked.
+# Scripts and the PyMuPDF-backed ingestion helpers call its partially-annotated
+# API; they stay loosely checked at those boundaries.
 [[tool.mypy.overrides]]
-module = ["probe_corpus", "smoke_test", "scripts.*"]
+module = ["probe_corpus", "smoke_test", "scripts.*", "src.ingestion.*"]
 disallow_untyped_calls = false
 
 [tool.pytest.ini_options]

@@ -18,6 +18,7 @@ from src.ingestion.elements import (
     make_element_id,
     normalise_bbox,
 )
+from src.ingestion.pdf_parser import parse_pdf
 
 __all__ = [
     "Answer",
@@ -32,4 +33,5 @@ __all__ = [
     "Usage",
     "make_element_id",
     "normalise_bbox",
+    "parse_pdf",
 ]
