@@ -20,7 +20,7 @@ yet.
 |---|---|---|
 | Contracts | `src/ingestion/elements.py`, `src/config.py` | implemented — tested |
 | Ingestion | `src/ingestion/` | implemented — tested on 3 arXiv papers |
-| Embedding | `src/embedding/` | spec written — not implemented |
+| Embedding | `src/embedding/` | implemented — 816 real elements stored in Qdrant |
 | Retrieval | `src/retrieval/` | spec written — not implemented |
 | Generation | `src/generation/` | spec written — not implemented |
 | Caching | `src/caching/` | spec written — not implemented |
@@ -135,6 +135,21 @@ Ingestion is read-only, idempotent, and logs per-page counts. It drops
 headers/footers, filters over-detected tables, renders vector figures from
 their bbox, and links PDF captions to their figure or table (ADR-014).
 
+### Step 3 — embed and store (works today)
+
+```bash
+python scripts/embed.py --dry-run     # validate the manifest, load no models
+python scripts/embed.py               # caption (if approved) + embed + write Qdrant
+python scripts/embed.py --no-captions # keep only captions already in the PDF
+```
+
+This captions uncaptioned figures/tables (only when `CAPTION_ALLOW_HOSTED=true`
+and a key is set), embeds text with sentence-transformers and FIGURE crops with
+CLIP, then writes two named vectors per element into an embedded Qdrant
+collection (ADR-013, ADR-015). The physical collection name encodes the vector
+dimensions, e.g. `elements_v1_t384i512` — retrieval must resolve the same name.
+Re-ingesting a `doc_id` deletes its old points first, so runs are idempotent.
+
 ```bash
 python scripts/query.py "What was Q3 revenue?" # planned
 python scripts/evaluate.py                     # planned
@@ -156,15 +171,16 @@ streamlit run src/ui/app.py                    # planned
 │   ├── raw/               # source PDFs (gitignored, read-only)
 │   ├── processed/         # elements, crops (gitignored, regenerable)
 │   └── eval_set/          # labeled questions (committed)
-├── docs/                  # architecture, evaluation, failure taxonomy
+├── docs/                  # architecture, stage guides, evaluation, failures
 ├── scripts/
 │   ├── probe_corpus.py    # corpus triage
 │   ├── ingest.py          # PDFs -> JSONL Elements + PNG crops
+│   ├── embed.py           # Elements -> Qdrant vectors + captions
 │   └── smoke_test.py      # environment verification
 ├── src/
 │   ├── config.py          # settings contract from .env.example
 │   ├── ingestion/         # pdf_parser, layout, tables, crops, elements
-│   ├── embedding/         # Elements -> vectors + captions
+│   ├── embedding/         # store, text, image, caption (ADR-013/015)
 │   ├── retrieval/         # query -> ranked Elements
 │   ├── generation/        # Elements -> cited Answer
 │   ├── caching/           # semantic answer cache
@@ -242,6 +258,7 @@ assume if nothing changes.
 | [`DECISIONS.md`](DECISIONS.md) | ADRs — context, decision, alternatives, consequences |
 | [`docs/architecture.md`](docs/architecture.md) | Stages, data flow, invariants |
 | [`docs/ingestion.md`](docs/ingestion.md) | Ingestion stages, thresholds, measured baseline, limits |
+| [`docs/embedding.md`](docs/embedding.md) | Caption gate, collection naming, storage layout, verification |
 | [`docs/eval-set.md`](docs/eval-set.md) | How to author and validate the committed labels |
 | [`docs/evaluation.md`](docs/evaluation.md) | Eval set format, metrics, honesty rules |
 | [`docs/failure-taxonomy.md`](docs/failure-taxonomy.md) | Observed failure classes |

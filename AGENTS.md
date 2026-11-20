@@ -45,7 +45,7 @@ audio/video.
 .
 ├── AGENTS.md, README.md, DECISIONS.md, pyproject.toml, uv.lock, .env.example, .gitignore
 ├── data/{raw,processed,eval_set}/        # gitignored except eval_set labels
-├── docs/{AGENTS.md,architecture.md,ingestion.md,evaluation.md,eval-set.md,failure-taxonomy.md}
+├── docs/{AGENTS.md,architecture.md,ingestion.md,embedding.md,evaluation.md,eval-set.md,failure-taxonomy.md}
 ├── src/
 │   ├── __init__.py, config.py, pipeline.py
 │   ├── ingestion/{AGENTS.md,elements.py,pdf_parser.py,layout.py,ocr.py,tables.py,crops.py}
@@ -63,7 +63,8 @@ so imports read `from src.ingestion.elements import Element`.
 
 **Status legend:** implemented today: `src/config.py`, the ingestion stage
 (`src/ingestion/elements.py`, `pdf_parser.py`, `layout.py`, `tables.py`,
-`crops.py`), and `scripts/{probe_corpus,ingest,smoke_test}.py`, with tests.
+`crops.py`), the embedding stage (`src/embedding/{text,image,caption,store}.py`),
+and `scripts/{probe_corpus,ingest,embed,smoke_test}.py`, with tests.
 Every other file in this tree is *planned*. Never assume a file exists — check
 before reading, and create it rather than reporting it missing.
 

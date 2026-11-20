@@ -16,10 +16,14 @@ traces to an `Element` with a page and bbox.
    orchestrates and links cross-page tables. Output: `Element`s with
    `image_path` + `bbox`. No OCR, `unstructured` or camelot in v0 (ADR-009,
    ADR-014). Run with `python scripts/ingest.py data/raw`.
-2. **Embedding** (`src/embedding/`): text -> sentence-transformers; figures -> VLM
-   caption + CLIP image embedding; tables -> caption + markdown, no image
-   embedding (ADR-013). Written to Qdrant with metadata and a `model_version`
-   tag. Re-ingest is idempotent per `doc_id`.
+2. **Embedding** (`src/embedding/`, **implemented**): text ->
+   sentence-transformers; figures -> VLM caption (gated) + CLIP image embedding;
+   tables -> markdown, no image embedding (ADR-013). `store.py` owns the Qdrant
+   schema: two named vectors (`text`, `image`), deterministic point ids,
+   delete-by-`doc_id` before upsert, and a full citation payload with
+   `model_version` (ADR-015). The physical collection is
+   `<base>_t<text_dim>i<image_dim>`; retrieval must resolve the same name.
+   Run with `python scripts/embed.py` (`--dry-run` validates without models).
 3. **Retrieval** (`src/retrieval/`): query embedded with both text and CLIP text
    encoders; dense + BM25 sparse search; RRF fuse; multimodal rerank; top-k
    `Element`s returned; abstain below a score threshold.
@@ -65,7 +69,13 @@ flowchart LR
   preserved.
 - Ingestion is idempotent per `doc_id`: content-derived ids and crop filenames
   are reused, and orphaned crops are removed on re-ingest.
-- Retrieval must return every part of a linked `table_group` together.
+- Embedding is idempotent per `doc_id`: old points are deleted before upsert,
+  point ids derive from `Element.id`, and a model change writes to a new
+  dimension-encoded collection rather than resizing an existing one.
+- Retrieval must resolve the same collection name embedding wrote from the same
+  models, and must return every part of a linked `table_group` together.
+- No hosted caption call without explicit approval; unapproved runs keep PDF
+  captions and never send crops off-machine.
 - No secrets in code; generated artifacts gitignored.
 - Read-only: no external writes. Document text/VLM output is untrusted data.
 

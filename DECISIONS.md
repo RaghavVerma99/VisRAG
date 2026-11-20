@@ -208,3 +208,37 @@ linked in this corpus — the conservative rule is exercised by a synthetic test
 instead. Retrieval must return a linked `table_group` together (future stage).
 The 25 kept tables are *not yet human-verified*; the earlier over-detection
 concern is reduced, not closed.
+
+## ADR-015: Qdrant schema, collection naming and write ownership
+**Context:** ADR-011 chose embedded Qdrant. A probe of `qdrant-client` 1.20 in
+local mode confirmed named vectors, filter deletes and UUID point ids work, but
+a collection cannot be resized in place and delete/recreate during one process
+left stale vector dimensions in memory. Model upgrades are expected (the text
+embedder already renamed a method between v5 and v6), so the collection name
+cannot be a fixed string. Retrieval must be able to resolve exactly the
+collection that embedding wrote.
+**Decision:** One physical collection per vector schema, named
+`<base>_t<text_dim>i<image_dim>` (e.g. `elements_v1_t384i512`). It carries two
+named vectors: `text` (sentence-transformers; tables use markdown, figures use
+caption) and `image` (CLIP, FIGURE crops only). Point ids are deterministic
+UUIDs derived from `Element.id`; re-ingesting a `doc_id` deletes its old points
+before upserting, so runs are idempotent. Every payload carries the full
+citation fields (`doc_id`, `page`, `bbox`, `element_type`), the raw text,
+`repr_type`, `has_image`, and `model_version`. Embedding owns the schema and all
+writes; retrieval only reads and searches. Payload indexes are created in server
+mode only — local mode ignores them and warns. Heavy models sit behind injected
+interfaces; captioning is gated behind `CAPTION_ALLOW_HOSTED=true` plus a key
+(root §9), and `local-llava` fails loudly until implemented. Transformers 5.x
+returns CLIP features in a model-output object (`pooler_output`); a
+compatibility extractor accepts both that and the older tensor return.
+**Alternatives:** A fixed collection name with delete/recreate (unreliable in
+local mode and destructive); a manual migration step (easy to skip); one
+collection per document (fragments cross-document queries).
+**Consequences:** A model change writes to a *new* collection; old collections
+remain on disk until a cleanup policy is added — retrieval must resolve the
+same name from the same models or it will search an empty/stale collection.
+`EmbeddingStats.collection` is the hand-off value. Two figures with neither PDF
+caption nor text get an image vector only when captions are disabled. Real run
+on the probe corpus: 816 points, 814 text vectors, 12 image vectors in
+`elements_v1_t384i512`. The corpus has no human relevance labels yet, so these
+are throughput facts, not retrieval-quality metrics.
