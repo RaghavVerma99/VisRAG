@@ -12,12 +12,14 @@ Read-only by design: the system ingests and answers, it never writes back.
 
 ## Status
 
-This is a **greenfield scaffold**: the specification, contracts, tooling and
-configuration are in place; the pipeline modules are not written yet.
+This is a **greenfield scaffold**: the data model, configuration, tooling and
+corpus probe are implemented and tested; the pipeline modules are not written
+yet.
 
 | Stage | Module | State |
 |---|---|---|
-| Ingestion | `src/ingestion/` | spec written — not implemented |
+| Contracts | `src/ingestion/elements.py`, `src/config.py` | implemented — tested |
+| Ingestion | `src/ingestion/` | data model done — parser/crops not implemented |
 | Embedding | `src/embedding/` | spec written — not implemented |
 | Retrieval | `src/retrieval/` | spec written — not implemented |
 | Generation | `src/generation/` | spec written — not implemented |
