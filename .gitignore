@@ -1,0 +1,52 @@
+# ---------------------------------------------------------------------------
+# Secrets — never commit
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv*/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---------------------------------------------------------------------------
+# Data — generated artifacts are rebuilt from data/raw, never committed
+# ---------------------------------------------------------------------------
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Eval LABELS are committed (they are source); generated reports are not.
+data/eval_set/reports/
+data/eval_set/latest_report.json
+data/eval_set/*.json
+
+# ---------------------------------------------------------------------------
+# Vector store, model weights, caches
+# ---------------------------------------------------------------------------
+.qdrant/
+models/
+.cache/
+
+# ---------------------------------------------------------------------------
+# OS / editor
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "multimodal-rag"
+version = "0.1.0"
+description = "Grounded Q&A over PDFs with citations to the exact text passage, table, or figure."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pymupdf>=1.24,<2",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "numpy>=1.26",
+    "pillow>=10.4",
+]
+
+# Heavy or platform-sensitive dependencies are opt-in extras so that a clean
+# checkout installs in seconds and CI stays fast. See ADR-008 / ADR-009.
+[project.optional-dependencies]
+embed = ["sentence-transformers>=3.0", "torch>=2.3"]
+store = ["qdrant-client>=1.9"]
+parse = ["unstructured[pdf]>=0.15"]
+tables = ["camelot-py>=1.0"]
+ocr = ["paddleocr>=2.9", "paddlepaddle>=3.0"]
+gen = ["openai>=1.40"]
+ui = ["streamlit>=1.36"]
+eval = ["ragas>=0.1.9"]
+dev = [
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+# ---------------------------------------------------------------------------
+# Tooling
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "RUF"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "S101"]
+"scripts/*" = ["ANN"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+# PyMuPDF ships no type stubs, so its calls are untyped by definition.
+[[tool.mypy.overrides]]
+module = ["pymupdf", "pymupdf.*", "fitz", "fitz.*"]
+ignore_missing_imports = true
+disallow_untyped_calls = false
+
+# Scripts call PyMuPDF's partially-annotated API; they stay loosely checked.
+[[tool.mypy.overrides]]
+module = ["probe_corpus", "smoke_test", "scripts.*"]
+disallow_untyped_calls = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "slow: long-running test, deselected by default in quick runs",
+    "network: requires a live network or hosted model; skipped by default",
+]
