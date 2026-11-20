@@ -71,6 +71,12 @@ disallow_untyped_calls = false
 module = ["probe_corpus", "smoke_test", "scripts.*", "src.ingestion.*"]
 disallow_untyped_calls = false
 
+# `openai` lives in the optional `gen` extra. Keeping it missing-tolerant makes
+# mypy pass both with and without that extra installed (no inline ignore needed).
+[[tool.mypy.overrides]]
+module = ["openai", "openai.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
