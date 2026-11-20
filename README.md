@@ -1,300 +1,243 @@
 # Multimodal RAG
 
-**Grounded Q&A over PDFs where the answer lives in text, a table, or a figure.**
+Grounded question answering over PDFs where evidence lives in text, tables, and figures.
 
-Ask a question about a real document. Get an answer that cites the exact passage,
-table, or chart — with the actual image crop shown as evidence, and an honest
-"I don't know" when the evidence isn't there.
+The system is designed to return answers with verifiable citations (`doc_id`, `page`, `bbox`), show the underlying visual evidence, and abstain when support is insufficient. It is **read-only**: documents are ingested and queried, never modified.
 
-Read-only by design: the system ingests and answers, it never writes back.
+## Project status
 
----
-
-## Status
-
-This is a **greenfield scaffold**: the data model, configuration, tooling and
-corpus probe are implemented and tested; the pipeline modules are not written
-yet.
-
-| Stage | Module | State |
+| Stage | Module(s) | Status |
 |---|---|---|
-| Contracts | `src/ingestion/elements.py`, `src/config.py` | implemented — tested |
-| Ingestion | `src/ingestion/` | implemented — tested on 3 arXiv papers |
-| Embedding | `src/embedding/` | implemented — 816 real elements stored in Qdrant |
-| Retrieval | `src/retrieval/` | spec written — not implemented |
-| Generation | `src/generation/` | spec written — not implemented |
-| Caching | `src/caching/` | spec written — not implemented |
-| Evaluation | `src/evaluation/` | spec written — not implemented |
-| UI | `src/ui/` | spec written — not implemented |
+| Contracts | `src/ingestion/elements.py`, `src/config.py` | Implemented and tested |
+| Ingestion | `src/ingestion/` | Implemented and tested on 3 arXiv papers |
+| Embedding | `src/embedding/` | Implemented; 816 elements stored in embedded Qdrant |
+| Retrieval | `src/retrieval/` | Specified, not implemented |
+| Generation | `src/generation/` | Specified, not implemented |
+| Caching | `src/caching/` | Specified, not implemented |
+| Evaluation | `src/evaluation/` | Specified, not implemented |
+| UI | `src/ui/` | Specified, not implemented |
 
-Nothing in this README claims a measured result. Numbers appear only once an
-evaluation run produces them.
+> This README does not claim measured retrieval or answer quality. Metrics are reported only after an evaluation run produces them.
 
----
+## Key capabilities
 
-## What makes this different
-
-Text-only RAG is table stakes. The hard, valuable parts are:
-
-- **Layout-aware ingestion** — figures keep their captions, tables stay whole,
-  every element keeps a page and a bounding box.
-- **Two representations per figure** — a VLM caption *and* a CLIP image
-  embedding, so "the revenue chart" and "this chart" both find it.
-- **Crops at generation time** — the vision model sees the actual image, not a
-  summary of it.
-- **Verifiable citations** — every claim traces to `doc_id`, `page`, `bbox`.
-- **Measured quality** — retrieval and answer metrics reported separately,
-  with a documented failure taxonomy.
-
----
+- **Layout-aware ingestion** — preserves figures with captions, keeps tables intact, and records a bounding box for every element.
+- **Multimodal representations** — figures can carry both a caption/text representation and a CLIP image embedding (ADR-013).
+- **Visual grounding** — generation is designed to receive actual image crops, not summaries alone.
+- **Traceable citations** — answers cite `doc_id`, `page`, and `bbox` rather than chunk indexes.
+- **Measured evaluation (planned)** — retrieval and answer quality reported separately, with cache disabled and a failure taxonomy.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph offline["Offline (batch)"]
-        PDFs[PDFs] --> ING[ingest]
-        ING --> EL["Elements<br/>text · table · figure<br/>+ crops"]
-        EL --> EMB[embed]
-        EMB --> QD[("Qdrant<br/>dense + sparse")]
+    subgraph offline[Offline batch]
+        PDFs[PDFs] --> ING[Ingest]
+        ING --> EL[Elements + crops]
+        EL --> EMB[Embed]
+        EMB --> QD[(Qdrant)]
     end
 
-    subgraph online["Online (per query)"]
-        Q[question] --> RET[retrieve<br/>dense + BM25 → RRF → rerank]
+    subgraph online[Online per query]
+        Q[Question] --> RET[Retrieve\n dense + sparse -> RRF -> rerank]
         QD --> RET
-        RET --> GEN[generate<br/>vision LLM + crops]
-        GEN --> ANS["Answer + citations"]
-        ANS --> CACHE[(semantic cache)]
-        ANS --> UI[evidence UI]
+        RET --> GEN[Generate\n vision LLM + crops]
+        GEN --> ANS[Answer + citations]
+        ANS --> CACHE[(Semantic cache)]
+        ANS --> UI[Evidence UI]
     end
 
-    subgraph quality["Offline (quality)"]
-        EVAL[eval set] --> RUN[runner]
-        RUN --> REP["report + failure taxonomy"]
+    subgraph quality[Offline quality]
+        EVAL[Eval set] --> RUN[Runner]
+        RUN --> REP[Report + failure taxonomy]
     end
 
     RET -.-> RUN
     GEN -.-> RUN
 ```
 
-Full detail: [`docs/architecture.md`](docs/architecture.md).
-
----
+Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## Quickstart
 
-Requires **Python 3.12** (pinned — see [ADR-008](DECISIONS.md)). `uv` is the
-packaging tool; `pip` works too. Commands below use `python -m uv`, which works
-even when `uv` isn't on `PATH`; a standalone install can drop the prefix.
+### Prerequisites
 
-> **Windows prerequisite.** CPU PyTorch wheels need the Microsoft Visual C++
-> 2015–2022 Redistributable **14.40 or newer**. With an older redistributable
-> (14.29 and below) `import torch` dies with `WinError 126 ... shm.dll`, because
-> `VCRUNTIME140_THREADS.dll` is missing. Fix it once, with admin rights:
-> `winget upgrade --id Microsoft.VCRedist.2015+.x64`
->
-> Without admin rights, pin an older wheel instead:
-> `uv pip install "torch<2.15" --index-url https://download.pytorch.org/whl/cpu`
+- **Python 3.12** (pinned; see [ADR-008](DECISIONS.md))
+- **uv** recommended (`pip` also works)
+- **Windows (CPU PyTorch):** Microsoft Visual C++ 2015–2022 Redistributable **14.40+** is required for PyTorch wheels ≥ 2.15. Older redistributables can fail with `WinError 126` (`VCRUNTIME140_THREADS.dll` missing).
+
+  ```powershell
+  winget upgrade --id Microsoft.VCRedist.2015+.x64
+  ```
+
+  Without admin rights, you can pin an older wheel instead:
+
+  ```bash
+  uv pip install "torch<2.15" --index-url https://download.pytorch.org/whl/cpu
+  ```
+
+### Setup
 
 ```bash
-git clone <repo> && cd multimodal-rag
+git clone <repo-url>
+cd multimodal-rag
 python -m uv venv --python 3.12
 python -m uv pip install -e ".[dev,embed,store]"
-cp .env.example .env          # fill in keys; never commit .env
+cp .env.example .env   # configure keys as needed; never commit .env
 ```
 
-Verify the environment:
+### Verify the environment
 
 ```bash
 python scripts/smoke_test.py                 # interpreter, imports, embedded Qdrant
-python scripts/smoke_test.py --with-models   # also loads the embedding model
+python scripts/smoke_test.py --with-models   # also loads embedding models
 pytest -q
 ```
 
-### Step 1 — triage your corpus (works today)
+### 1. Probe the corpus
 
-Before ingesting, measure what the documents actually need:
+Inspect documents before ingestion to understand OCR needs, table regions, figures, and render cost.
 
 ```bash
 python scripts/probe_corpus.py data/raw --json data/processed/corpus_probe.json
 ```
 
-It reports text-less pages (OCR need), tables PyMuPDF can already find, raster
-images plus vector chart pages, and render cost per page. Those numbers decide
-whether `unstructured`, `camelot` and `PaddleOCR` belong in v0 at all.
-
-### Step 2 — ingest PDFs (works today)
+### 2. Ingest PDFs
 
 ```bash
 python scripts/ingest.py data/raw
-# JSONL manifest: data/processed/elements.jsonl
-# PNG crops:      data/processed/<doc_id>/<element_id>.png
 ```
 
-Ingestion is read-only, idempotent, and logs per-page counts. It drops
-headers/footers, filters over-detected tables, renders vector figures from
-their bbox, and links PDF captions to their figure or table (ADR-014).
+Outputs:
 
-### Step 3 — embed and store (works today)
+- `data/processed/elements.jsonl` — element manifest
+- `data/processed/<doc_id>/<element_id>.png` — rendered crops
+
+Ingestion is read-only and idempotent. It drops headers/footers, filters over-detected tables, renders vector figures from bounding boxes, and links PDF captions to figures/tables (ADR-014).
+
+### 3. Embed and store
 
 ```bash
-python scripts/embed.py --dry-run     # validate the manifest, load no models
-python scripts/embed.py               # caption (if approved) + embed + write Qdrant
-python scripts/embed.py --no-captions # keep only captions already in the PDF
+python scripts/embed.py --dry-run     # validate manifest without loading models
+python scripts/embed.py --no-captions # embed using captions already present in the PDF
+python scripts/embed.py               # caption (if approved) + embed + write to Qdrant
 ```
 
-This captions uncaptioned figures/tables (only when `CAPTION_ALLOW_HOSTED=true`
-and a key is set), embeds text with sentence-transformers and FIGURE crops with
-CLIP, then writes two named vectors per element into an embedded Qdrant
-collection (ADR-013, ADR-015). The physical collection name encodes the vector
-dimensions, e.g. `elements_v1_t384i512` — retrieval must resolve the same name.
-Re-ingesting a `doc_id` deletes its old points first, so runs are idempotent.
+Embedding writes text vectors (sentence-transformers) and figure image vectors (CLIP) into an embedded Qdrant collection (ADR-013, ADR-015). The physical collection name encodes vector dimensions (for example, `elements_v1_t384i512`) and is the value retrieval must resolve.
+
+Hosted captioning runs only when `CAPTION_ALLOW_HOSTED=true` and a valid API key is configured.
+
+### Planned commands
 
 ```bash
-python scripts/query.py "What was Q3 revenue?" # planned
-python scripts/evaluate.py                     # planned
-streamlit run src/ui/app.py                    # planned
+python scripts/query.py "What was Q3 revenue?"
+python scripts/evaluate.py
+streamlit run src/ui/app.py
 ```
 
----
+## Repository structure
 
-## Project layout
-
-```
+```text
 .
-├── AGENTS.md              # root instructions (source of truth)
-├── DECISIONS.md           # architecture decision records
+├── AGENTS.md              # root agent/developer instructions
+├── DECISIONS.md           # architecture decision records (ADRs)
 ├── README.md
-├── pyproject.toml         # deps, ruff, mypy, pytest
+├── pyproject.toml         # dependencies and tool configuration
 ├── .env.example           # configuration contract
 ├── data/
 │   ├── raw/               # source PDFs (gitignored, read-only)
-│   ├── processed/         # elements, crops (gitignored, regenerable)
+│   ├── processed/         # generated elements/crops (gitignored)
 │   └── eval_set/          # labeled questions (committed)
-├── docs/                  # architecture, stage guides, evaluation, failures
+├── docs/                  # architecture, stage guides, evaluation
 ├── scripts/
-│   ├── probe_corpus.py    # corpus triage
-│   ├── ingest.py          # PDFs -> JSONL Elements + PNG crops
-│   ├── embed.py           # Elements -> Qdrant vectors + captions
-│   └── smoke_test.py      # environment verification
+│   ├── probe_corpus.py
+│   ├── ingest.py
+│   ├── embed.py
+│   └── smoke_test.py
 ├── src/
-│   ├── config.py          # settings contract from .env.example
-│   ├── ingestion/         # pdf_parser, layout, tables, crops, elements
-│   ├── embedding/         # store, text, image, caption (ADR-013/015)
-│   ├── retrieval/         # query -> ranked Elements
-│   ├── generation/        # Elements -> cited Answer
-│   ├── caching/           # semantic answer cache
-│   ├── evaluation/        # metrics + runner
-│   └── ui/                # evidence UI
+│   ├── config.py
+│   ├── ingestion/         # parser, layout, tables, crops, elements
+│   ├── embedding/         # store, text, image, caption
+│   ├── retrieval/         # planned
+│   ├── generation/        # planned
+│   ├── caching/           # planned
+│   ├── evaluation/        # planned
+│   └── ui/                # planned
 └── tests/
 ```
 
-Each module has its own `AGENTS.md` with its contract, rules and test list.
-
----
+Each module has a scoped `AGENTS.md` describing its contract, rules, and tests.
 
 ## Design invariants
 
-These hold everywhere and are enforced by tests:
-
-1. **A figure never loses its caption.** They share a page and adjacent bboxes.
-2. **A table is never split within a page.** Cross-page tables are emitted one
-   element per page and linked by `metadata.table_group` so they are always
-   retrieved together.
-3. **`bbox` is always preserved** — `(x0, y0, x1, y1)` in page coordinates.
-   Citations and UI highlights depend on it.
-4. **Citations point at `doc_id` / `page` / `bbox`**, never at a chunk index.
-5. **No bare dicts across module boundaries** — Pydantic models only.
-6. **Re-ingest is idempotent** — same PDF, same element ids, no duplicates.
-7. **Generated artifacts are disposable** — everything under `data/processed`
-   rebuilds from `data/raw`.
-8. **Read-only** — no email, post, pay, merge or delete, ever.
-
----
+1. **Figures keep their captions** (or an explicit caption link).
+2. **Tables are not split within a page**; cross-page tables are linked via `metadata.table_group`.
+3. **Bounding boxes are preserved** as `(x0, y0, x1, y1)` in page coordinates.
+4. **Citations use `doc_id`, `page`, and `bbox`**, not chunk indexes.
+5. **Pydantic models are used across module boundaries** (no ad hoc dictionaries).
+6. **Ingestion and embedding are idempotent** per document/model configuration.
+7. **Generated artifacts are reproducible** from source data and configuration.
+8. **The system is read-only**.
 
 ## Evaluation
 
-Retrieval quality and answer quality are measured and reported **separately**,
-with the cache disabled, so a good answer can't hide bad retrieval.
+Evaluation is designed to measure retrieval and answer quality separately, with caching disabled.
 
-| Layer | Metrics |
+| Layer | Planned metrics |
 |---|---|
-| Retrieval | recall@k, MRR, **image recall@k** — broken down by element type |
-| Generation | faithfulness, citation correctness, answer relevancy, abstention accuracy |
+| Retrieval | Recall@k, MRR, image recall@k (by element type) |
+| Generation | Faithfulness, citation correctness, answer relevancy, abstention accuracy |
 
-Every run records the seed, model versions, config hash and corpus hash. The
-eval set includes questions that are **only** answerable from a figure or table,
-plus a labeled unanswerable split for abstention. Failures are classified into
-[`docs/failure-taxonomy.md`](docs/failure-taxonomy.md).
-
-Methodology: [`docs/evaluation.md`](docs/evaluation.md).
-
----
+Each run should record seed, model versions, config hash, and corpus hash. The eval set must include questions answerable only from figures/tables and an unanswerable split for abstention. See [`docs/evaluation.md`](docs/evaluation.md) and [`docs/failure-taxonomy.md`](docs/failure-taxonomy.md).
 
 ## Open decisions
 
-Tracked here until each gets an ADR. Defaults shown are what the code will
-assume if nothing changes.
-
-| # | Decision | Default if unresolved |
+| # | Decision | Current default |
 |---|---|---|
-| 1 | ~~`unstructured` or PyMuPDF-only?~~ | **resolved:** PyMuPDF-only (ADR-009) |
-| 2 | ~~Is OCR needed?~~ | **resolved:** no — 0% text-less pages (ADR-009) |
-| 3 | Package layout: keep `src/` as the package root, or move to `src/multimodal_rag/`? | keep `src/` |
-| 4 | Caption source: hosted (`gpt-4o-mini`) or local LLaVA? | hosted, with approval gate |
-| 5 | Reranker: cross-encoder, VLM, or none in v0? | none in v0, add after baseline |
-| 6 | One-level or two-level cache (retrieval + answer)? | answer-only in v0 |
-| 7 | Faithfulness judge: LLM-as-judge or human spot-check? | LLM judge, pinned model + prompt |
-| 8 | Text embedding model for production | `all-MiniLM-L6-v2` for the spike |
-| 9 | ~~Does PyMuPDF over-detect tables?~~ | **mitigated:** size/shape filter kept 25 of 39 regions (ADR-014); human spot-check still advised |
+| 1 | `unstructured` or PyMuPDF-only? | **Resolved:** PyMuPDF-only (ADR-009) |
+| 2 | Is OCR needed? | **Resolved:** No for v0 corpus (ADR-009) |
+| 3 | Package layout (`src/` vs `src/multimodal_rag/`) | Keep `src/` |
+| 4 | Caption source (hosted vs local LLaVA) | Hosted, with approval gate |
+| 5 | Reranker strategy | None in v0; add after baseline |
+| 6 | Cache scope | Answer-only in v0 |
+| 7 | Faithfulness judging method | LLM judge (pinned model/prompt) |
+| 8 | Production text embedding model | `all-MiniLM-L6-v2` for initial baseline |
+| 9 | PyMuPDF table over-detection | **Mitigated:** 25/39 regions kept (ADR-014); human spot-check advised |
 
----
+## Documentation
 
-## Documentation map
-
-| File | Contents |
+| Document | Purpose |
 |---|---|
-| [`AGENTS.md`](AGENTS.md) | Root instructions: scope, stack, data model, conventions |
-| [`DECISIONS.md`](DECISIONS.md) | ADRs — context, decision, alternatives, consequences |
-| [`docs/architecture.md`](docs/architecture.md) | Stages, data flow, invariants |
-| [`docs/ingestion.md`](docs/ingestion.md) | Ingestion stages, thresholds, measured baseline, limits |
-| [`docs/embedding.md`](docs/embedding.md) | Caption gate, collection naming, storage layout, verification |
-| [`docs/eval-set.md`](docs/eval-set.md) | How to author and validate the committed labels |
-| [`docs/evaluation.md`](docs/evaluation.md) | Eval set format, metrics, honesty rules |
+| [`AGENTS.md`](AGENTS.md) | Root instructions, scope, data model, conventions |
+| [`DECISIONS.md`](DECISIONS.md) | Architecture decision records (ADRs) |
+| [`docs/architecture.md`](docs/architecture.md) | System stages, data flow, invariants |
+| [`docs/ingestion.md`](docs/ingestion.md) | Ingestion guide, thresholds, baseline, limits |
+| [`docs/embedding.md`](docs/embedding.md) | Embedding guide, storage layout, verification |
+| [`docs/eval-set.md`](docs/eval-set.md) | Eval-set authoring and validation |
+| [`docs/evaluation.md`](docs/evaluation.md) | Metrics and evaluation methodology |
 | [`docs/failure-taxonomy.md`](docs/failure-taxonomy.md) | Observed failure classes |
-| `src/<module>/AGENTS.md` | Per-module contract, rules, tests |
-
----
+| `src/<module>/AGENTS.md` | Module-level contracts and rules |
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Language | Python 3.12 (pinned), type hints, Pydantic v2 |
-| PDF render | PyMuPDF 1.x (pinned `<2` — avoids the ONNX layout model) |
-| Parsing | PyMuPDF first; `unstructured` if the corpus probe justifies it |
-| OCR | not required for the v0 corpus (probe: 0% text-less pages) |
-| Tables | PyMuPDF `find_tables`; camelot as fallback |
-| Captions | Hosted VLM (default) or local LLaVA |
+| Language | Python 3.12, type hints, Pydantic v2 |
+| PDF rendering | PyMuPDF 1.x (`<2`) |
+| Parsing/tables | PyMuPDF (`find_tables`) with filtered heuristics |
+| Captions | Hosted VLM by default (approval-gated); local LLaVA planned |
 | Text embeddings | sentence-transformers |
-| Image embeddings | CLIP (ViT-B/32) |
-| Vector store | Qdrant, embedded mode in v0 |
-| Generation | Vision-capable LLM behind an interface |
-| Cache | In-process, Redis later |
-| UI | Streamlit |
-| Eval | Custom metrics + partial RAGAS |
-
----
+| Image embeddings | CLIP (ViT-B/32), figures only |
+| Vector store | Qdrant (embedded mode in v0) |
+| Generation | Vision-capable LLM behind an interface (planned) |
+| Caching | In-process semantic cache (planned) |
+| UI | Streamlit (planned) |
+| Evaluation | Custom metrics + partial RAGAS (planned) |
 
 ## Safety and privacy
 
-- **Read-only.** No external write actions exist in this system.
-- **Documents are untrusted data.** Text and VLM output are never treated as
-  instructions; embedded directives are ignored and reported.
-- **Sensitive images** are not sent to a hosted vision API without explicit
-  approval — use the local model path instead.
-- **PII** found in documents is flagged, not silently embedded into answers.
-- **Secrets** come from `.env` or the environment; `.env` is gitignored.
-#   V i s R A G  
- #   V i s R A G  
- 
+- **Read-only system:** no external write actions (email, post, payment, merge, delete).
+- **Untrusted content:** document text and model outputs are treated as data, not instructions.
+- **Sensitive data handling:** hosted captioning/vision calls require explicit approval; prefer local processing for sensitive documents.
+- **PII awareness:** flag sensitive content; do not silently expose it.
+- **Secrets management:** load keys from `.env` or environment variables; `.env` is gitignored.
