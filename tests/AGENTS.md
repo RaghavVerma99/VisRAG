@@ -6,8 +6,10 @@ Scoped instructions for `tests/`. Root `AGENTS.md` applies.
 Keep pipeline stages honest. Every module change needs a passing test.
 
 ## Files
-- `test_ingestion.py`, `test_embedding.py`, `test_retrieval.py`,
-  `test_generation.py`, `test_caching.py`, `test_evaluation.py`, `test_ui.py`.
+- Implemented: `test_probe_corpus.py`, `test_elements.py`, `test_config.py`,
+  `test_ingestion.py`, plus `conftest.py` (synthetic PDF fixture).
+- Planned: `test_embedding.py`, `test_retrieval.py`, `test_generation.py`,
+  `test_caching.py`, `test_evaluation.py`, `test_ui.py`.
 
 ## Rules
 1. **Use fixtures, not real private PDFs.** Build a tiny synthetic PDF (one

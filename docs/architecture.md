@@ -10,9 +10,12 @@ traces to an `Element` with a page and bbox.
 - **Online (per query):** retrieval -> generation -> cache -> UI.
 
 ## Stages
-1. **Ingestion** (`src/ingestion/`): PyMuPDF renders pages; `unstructured`
-   partitions regions; PaddleOCR reads scans; camelot extracts tables; crops
-   saved to disk. Output: `Element`s with `image_path` + `bbox`.
+1. **Ingestion** (`src/ingestion/`, **implemented**): PyMuPDF-only. `tables.py`
+   filters `find_tables()` regions; `layout.py` groups vector/raster figures and
+   pairs PDF captions; `crops.py` renders bboxes to PNG; `pdf_parser.py`
+   orchestrates and links cross-page tables. Output: `Element`s with
+   `image_path` + `bbox`. No OCR, `unstructured` or camelot in v0 (ADR-009,
+   ADR-014). Run with `python scripts/ingest.py data/raw`.
 2. **Embedding** (`src/embedding/`): text -> sentence-transformers; figures -> VLM
    caption + CLIP image embedding; tables -> caption + markdown, no image
    embedding (ADR-013). Written to Qdrant with metadata and a `model_version`
@@ -60,6 +63,9 @@ flowchart LR
 - Figure + caption stay linked; a table is never split within a page
   (cross-page tables are linked by `metadata.table_group`); bbox is always
   preserved.
+- Ingestion is idempotent per `doc_id`: content-derived ids and crop filenames
+  are reused, and orphaned crops are removed on re-ingest.
+- Retrieval must return every part of a linked `table_group` together.
 - No secrets in code; generated artifacts gitignored.
 - Read-only: no external writes. Document text/VLM output is untrusted data.
 

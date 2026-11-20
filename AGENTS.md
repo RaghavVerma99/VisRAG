@@ -61,11 +61,11 @@ audio/video.
 Note: module is `embedding` (singular) under `src/`; `src/` is the package root,
 so imports read `from src.ingestion.elements import Element`.
 
-**Status legend:** implemented today: `src/config.py`,
-`src/ingestion/elements.py`, `scripts/probe_corpus.py`, `scripts/smoke_test.py`
-and their tests. Every other file in this tree is *planned*. Never assume a
-file exists — check before reading, and create it rather than reporting it
-missing.
+**Status legend:** implemented today: `src/config.py`, the ingestion stage
+(`src/ingestion/elements.py`, `pdf_parser.py`, `layout.py`, `tables.py`,
+`crops.py`), and `scripts/{probe_corpus,ingest,smoke_test}.py`, with tests.
+Every other file in this tree is *planned*. Never assume a file exists — check
+before reading, and create it rather than reporting it missing.
 
 ## 5. Core data model
 The normative schema lives in `src/ingestion/elements.py` (ADR-012); this

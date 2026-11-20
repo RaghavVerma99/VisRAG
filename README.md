@@ -19,7 +19,7 @@ yet.
 | Stage | Module | State |
 |---|---|---|
 | Contracts | `src/ingestion/elements.py`, `src/config.py` | implemented — tested |
-| Ingestion | `src/ingestion/` | data model done — parser/crops not implemented |
+| Ingestion | `src/ingestion/` | implemented — tested on 3 arXiv papers |
 | Embedding | `src/embedding/` | spec written — not implemented |
 | Retrieval | `src/retrieval/` | spec written — not implemented |
 | Generation | `src/generation/` | spec written — not implemented |
@@ -113,7 +113,7 @@ pytest -q
 
 ### Step 1 — triage your corpus (works today)
 
-Before writing ingestion code, measure what the documents actually need:
+Before ingesting, measure what the documents actually need:
 
 ```bash
 python scripts/probe_corpus.py data/raw --json data/processed/corpus_probe.json
@@ -123,10 +123,19 @@ It reports text-less pages (OCR need), tables PyMuPDF can already find, raster
 images plus vector chart pages, and render cost per page. Those numbers decide
 whether `unstructured`, `camelot` and `PaddleOCR` belong in v0 at all.
 
-### Step 2 — pipeline (not implemented yet)
+### Step 2 — ingest PDFs (works today)
 
 ```bash
-python scripts/ingest.py --input data/raw      # planned
+python scripts/ingest.py data/raw
+# JSONL manifest: data/processed/elements.jsonl
+# PNG crops:      data/processed/<doc_id>/<element_id>.png
+```
+
+Ingestion is read-only, idempotent, and logs per-page counts. It drops
+headers/footers, filters over-detected tables, renders vector figures from
+their bbox, and links PDF captions to their figure or table (ADR-014).
+
+```bash
 python scripts/query.py "What was Q3 revenue?" # planned
 python scripts/evaluate.py                     # planned
 streamlit run src/ui/app.py                    # planned
@@ -150,9 +159,11 @@ streamlit run src/ui/app.py                    # planned
 ├── docs/                  # architecture, evaluation, failure taxonomy
 ├── scripts/
 │   ├── probe_corpus.py    # corpus triage
+│   ├── ingest.py          # PDFs -> JSONL Elements + PNG crops
 │   └── smoke_test.py      # environment verification
 ├── src/
-│   ├── ingestion/         # PDF -> Elements + crops
+│   ├── config.py          # settings contract from .env.example
+│   ├── ingestion/         # pdf_parser, layout, tables, crops, elements
 │   ├── embedding/         # Elements -> vectors + captions
 │   ├── retrieval/         # query -> ranked Elements
 │   ├── generation/        # Elements -> cited Answer
@@ -219,7 +230,7 @@ assume if nothing changes.
 | 6 | One-level or two-level cache (retrieval + answer)? | answer-only in v0 |
 | 7 | Faithfulness judge: LLM-as-judge or human spot-check? | LLM judge, pinned model + prompt |
 | 8 | Text embedding model for production | `all-MiniLM-L6-v2` for the spike |
-| 9 | Does PyMuPDF over-detect tables (39 on 46 pages)? | spot-check before trusting it |
+| 9 | ~~Does PyMuPDF over-detect tables?~~ | **mitigated:** size/shape filter kept 25 of 39 regions (ADR-014); human spot-check still advised |
 
 ---
 

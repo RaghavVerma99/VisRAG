@@ -168,3 +168,43 @@ caption + markdown `structured` text, and are **not** image-embedded.
 retrieval path); embedding table crops (index bloat, near-zero recall gain).
 **Consequences:** One encoder pair, consistent vector space, smaller index.
 Revisit SigLIP only if a paired text encoder is adopted at the same time.
+
+## ADR-014: Ingestion v0 is PyMuPDF-only, with measured filters
+**Context:** ADR-009 closed the capability gate (no OCR needed; 18 vector-chart
+pages but only 5 raster images), yet the module specs still described
+`unstructured`, LayoutLMv3, camelot and PaddleOCR as the v0 path. A first pass
+over the probe corpus confirmed the risk: PyMuPDF reported 39 table regions in
+46 pages, including many 48pt-wide ruled margins that are not tables, and split
+one composite figure (ResNet p4) into five crops with a single caption.
+**Decision:** Implement ingestion with pure PyMuPDF geometry:
+- `doc_id` is the lowercased, slugified filename; the CLI rejects duplicate ids.
+- Text comes from `get_text("blocks")`; headers, footers and bare page numbers
+  are dropped. Text whose bbox is >50% inside a table/figure is not emitted
+  twice — the markdown or crop carries it.
+- Table candidates must be >=100pt wide, >=20pt high, >=2 non-empty rows and
+  >=2 columns. Empty rows are removed before rendering markdown.
+- Figures come from clustered vector drawings (>=8 paths, area >=400pt²,
+  <=70% of the page) plus raster image rects. Panels within 120pt horizontally
+  and 60pt vertically are merged into one figure, so a shared caption links to
+  the whole figure (Transformer p4 panels are 100pt apart).
+- A PDF caption matching `^(Figure|Fig\.?|Table)\s*\d+\b` is written into the
+  target element's `caption`; it is not emitted as a second TEXT element. An
+  unmatched caption stays as TEXT.
+- Cross-page tables are linked only when each page has exactly one table, with
+  the same column count and x-span within 10pt; parts get a shared
+  `metadata.table_group` and `continues` on all but the last.
+- Crops are rendered from the bbox with `get_pixmap(clip=..., dpi=150)` into
+  `data/processed/<doc_id>/<element_id>.png`. Re-ingest overwrites the same
+  files and deletes orphans; source PDFs are never modified.
+**Alternatives:** `unstructured` partitioning and camelot extraction (both work
+on Python 3.12 but add a dependency for no measured gain here); leaving the raw
+39 table regions unfiltered (would put ruled margins into retrieval); emitting
+caption TEXT elements separately (duplicate evidence).
+**Consequences:** First real run over 3 papers / 46 pages produced **816
+elements: 779 TEXT, 25 TABLE, 12 FIGURE**; 14 of 25 table candidates were
+rejected by the size/shape filter. 10/12 figures and 18/25 tables have a PDF
+caption; the rest rely on the later VLM caption pass. No cross-page table was
+linked in this corpus — the conservative rule is exercised by a synthetic test
+instead. Retrieval must return a linked `table_group` together (future stage).
+The 25 kept tables are *not yet human-verified*; the earlier over-detection
+concern is reduced, not closed.
