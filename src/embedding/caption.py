@@ -145,6 +145,12 @@ def build_captioner(settings: Settings, *, enabled: bool = True) -> Captioner:
             "Local LLaVA captioning is not implemented yet; use CAPTION_PROVIDER=openai "
             "with approval, or disable captions for this run."
         )
+    if settings.caption_provider == "anthropic":
+        raise NotImplementedError(
+            "Anthropic captioning is not implemented yet; the hosted captioner uses the "
+            "OpenAI vision client. Use CAPTION_PROVIDER=openai with approval, or disable "
+            "captions for this run."
+        )
     if not settings.caption_allow_hosted:
         LOG.warning("Hosted captioning is disabled; keeping captions found in the PDF.")
         return NullCaptioner()

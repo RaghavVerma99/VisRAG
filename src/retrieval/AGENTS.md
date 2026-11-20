@@ -8,7 +8,8 @@ with scores. Online (per-query) stage. Quality here determines everything
 downstream.
 
 ## Files
-- `vector_store.py` — Qdrant client, collection schema, hybrid search wrapper.
+- `vector_store.py` — Qdrant read/search wrapper and collection resolution.
+  The schema and all writes belong to embedding (ADR-015), not this module.
 - `hybrid.py` — **entry point**: `retrieve(query: str, top_k: int) -> list[ScoredElement]`.
   Dense (text + CLIP text encoders) + sparse (BM25) search.
 - `fusion.py` — reciprocal rank fusion (RRF) to merge ranked lists.
@@ -16,11 +17,14 @@ downstream.
 
 ## Rules
 1. **Embed the query twice**: sentence-transformers for text slots, CLIP text
-   encoder for image slots. Search both collections.
+   encoder for image slots. Search both named vectors (`text` and `image`) in the
+   **same** dimension-encoded collection resolved from the current models
+   (ADR-015). The base name alone is not the physical collection.
 2. **Hybrid = dense + sparse.** Always combine vector similarity with BM25
    keyword scores; fuse with RRF (`score = Σ 1/(k + rank)`, k≈60).
-3. **Metadata filters** supported: `doc_id`, `type`, `page` range — expose as
-   optional args to `retrieve`.
+3. **Metadata filters** supported: `doc_id`, `element_type`, `page` range — expose
+   as optional args to `retrieve`. Use the payload field names embedding writes
+   (`element_type`, not `type`).
 4. **Rerank after fusion**: top 2·top_k candidates go to the reranker; return
    final top_k. Reranker can be a cheap cross-encoder for text and a VLM for
    image crops.

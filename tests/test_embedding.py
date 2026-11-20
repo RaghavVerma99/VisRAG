@@ -370,6 +370,12 @@ def test_local_llava_fails_loudly() -> None:
         build_captioner(settings)
 
 
+def test_anthropic_captioner_fails_loudly() -> None:
+    settings = Settings(_env_file=None, caption_provider="anthropic", caption_allow_hosted=True)
+    with pytest.raises(NotImplementedError, match="Anthropic"):
+        build_captioner(settings)
+
+
 def test_caption_cache_avoids_a_second_call(tmp_path: Path) -> None:
     crop = crop_file(tmp_path)
     inner = FakeCaptioner()
