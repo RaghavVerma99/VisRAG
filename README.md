@@ -241,6 +241,8 @@ assume if nothing changes.
 | [`AGENTS.md`](AGENTS.md) | Root instructions: scope, stack, data model, conventions |
 | [`DECISIONS.md`](DECISIONS.md) | ADRs — context, decision, alternatives, consequences |
 | [`docs/architecture.md`](docs/architecture.md) | Stages, data flow, invariants |
+| [`docs/ingestion.md`](docs/ingestion.md) | Ingestion stages, thresholds, measured baseline, limits |
+| [`docs/eval-set.md`](docs/eval-set.md) | How to author and validate the committed labels |
 | [`docs/evaluation.md`](docs/evaluation.md) | Eval set format, metrics, honesty rules |
 | [`docs/failure-taxonomy.md`](docs/failure-taxonomy.md) | Observed failure classes |
 | `src/<module>/AGENTS.md` | Per-module contract, rules, tests |

@@ -4,7 +4,8 @@ Goal: measure RAG quality with evidence, not vibes. Run offline with the cache
 disabled so results reflect the real pipeline.
 
 ## Eval set
-`data/eval_set/questions.jsonl` — one item per line:
+`data/eval_set/questions.jsonl` — one item per line. See
+[`eval-set.md`](eval-set.md) for the authoring workflow and checklist.
 ```json
 {"qid": "q1", "question": "What was Q3 revenue?", "answerable": true, "relevant": [{"doc_id": "acme-2025-q3", "page": 12, "bbox": [72.0, 240.0, 480.0, 300.0]}], "keywords": ["12.4M"]}
 ```

@@ -7,7 +7,9 @@ Keep architecture and evaluation write-ups accurate and in sync with code.
 
 ## Files
 - `architecture.md` — component diagram, data flow, invariants.
+- `ingestion.md` — operator's guide: stages, thresholds, measured baseline, limits.
 - `evaluation.md` — methodology, metrics definitions, how to run, how to read results.
+- `eval-set.md` — how to author and validate the committed label set.
 - `failure-taxonomy.md` — classes of observed failures with counts and examples.
 
 ## Rules

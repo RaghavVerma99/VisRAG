@@ -45,7 +45,7 @@ audio/video.
 .
 ├── AGENTS.md, README.md, DECISIONS.md, pyproject.toml, uv.lock, .env.example, .gitignore
 ├── data/{raw,processed,eval_set}/        # gitignored except eval_set labels
-├── docs/{AGENTS.md,architecture.md,evaluation.md,failure-taxonomy.md}
+├── docs/{AGENTS.md,architecture.md,ingestion.md,evaluation.md,eval-set.md,failure-taxonomy.md}
 ├── src/
 │   ├── __init__.py, config.py, pipeline.py
 │   ├── ingestion/{AGENTS.md,elements.py,pdf_parser.py,layout.py,ocr.py,tables.py,crops.py}
